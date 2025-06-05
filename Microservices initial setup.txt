@@ -1,0 +1,290 @@
+# Instructions on how to generate traces of MicroSuite on Single Node with intel_ptrace
+
+Create a single node cluster on CloudLab.
+
+When cluster is ready execute the following.
+
+## Add more storage if needed
+
+'''
+
+sudo mkfs.ext4 /dev/sda4
+
+sudo /usr/local/etc/emulab/mkextrafs.pl /mydata
+sudo blkid /dev/sda4
+
+sudo mkdir /mnt/newdata
+sudo mount /dev/sda4 /mnt/newdata
+echo "/dev/sda4 /mnt/newdata ext4 defaults 0 0" | sudo tee -a /etc/fstab
+df -h | grep /mnt/newdata
+cd /mnt/newdata/
+sudo chmod -R g+w ./
+
+'''
+
+## give permisions to the new storage and move there
+
+'''
+
+cd /
+sudo su
+chmod -R 777 /mnt/newdata/
+exit
+cd /mnt/newdata/
+
+'''
+
+## clone git
+
+'''
+
+git clone https://github.com/svassi04/MicroSuite.git
+cd MicroSuite
+
+'''
+
+
+## 1) Install the necessary dependecies / Run microservice
+
+
+For single node deployments execute the following
+
+'''
+
+sudo sh setup_node_mydata.sh
+
+sudo docker compose up -d
+
+'''
+
+## enter and fetch the newer version of microservice
+
+'''
+
+sudo docker ps
+sudo docker exec -it <container_id> bash
+
+
+cd MicroSuite
+git remote add fork https://github.com/svassi04/MicroSuite.git
+git fetch fork
+git config --global user.name <username>
+git config --global user.email <user_email>
+git stash save "Stash before merging from fork"
+git merge fork/master
+
+
+'''
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##Set Algebra
+
+### download and prepare dataset
+
+wget https://akshithasriraman.eecs.umich.edu/dataset/SetAlgebra/wordIDs_mapped_to_posting_lists.txt
+mv wordIDs_mapped_to_posting_lists.txt /home
+
+rm /home/setalgebra_shrad*.txt; shrads_num=4; lines_per_shard=$((($(wc -l < /home/wordIDs_mapped_to_posting_lists.txt) + shrads_num - 1) / shrads_num)); split -d --additional-suffix=.txt -l $lines_per_shard /home/wordIDs_mapped_to_posting_lists.txt /home/setalgebra_shrad
+cd /home
+shuf --random-source=<(yes 1242) wordIDs_mapped_to_posting_lists.txt | grep -v '[a-zA-Z%]' | head -n10000 > setalgebra_query_set.txt
+
+
+### setup processes
+
+cd /MicroSuite/src/SetAlgebra/intersection_service/service/
+make clean; make
+taskset -c 0,1,2,3,4 ./intersection_server 0.0.0.0:50050 /home/setalgebra_shrad00.txt 1 0 4 &
+taskset -c 5,6,7,8,9 ./intersection_server 0.0.0.0:50051 /home/setalgebra_shrad01.txt 1 1 4 &
+taskset -c 10,11,12,13,14 ./intersection_server 0.0.0.0:50052 /home/setalgebra_shrad02.txt 1 2 4 &
+taskset -c 15,16,17,18,19 ./intersection_server 0.0.0.0:50053 /home/setalgebra_shrad03.txt 1 3 4 &
+
+
+cd /MicroSuite/src/SetAlgebra/union_service/service/
+make clean; make
+touch lookup_servers_IP.txt
+echo "0.0.0.0:50050" > lookup_servers_IP.txt
+echo "0.0.0.0:50051" >> lookup_servers_IP.txt
+echo "0.0.0.0:50052" >> lookup_servers_IP.txt
+echo "0.0.0.0:50053" >> lookup_servers_IP.txt
+./mid_tier_server 4 lookup_servers_IP.txt 0.0.0.0:50054 1 1 1 &
+
+
+cd /MicroSuite/src/SetAlgebra/load_generator/
+make clean; make
+./load_generator_open_loop /home/setalgebra_query_set.txt ./results 50 2 0.0.0.0:50054
+
+
+
+
+
+
+##HD Search
+
+### download and prepare dataset
+
+wget https://akshithasriraman.eecs.umich.edu/dataset/HDSearch/image_feature_vectors.dat 
+mv ./image_feature_vectors.dat /home
+
+### setup processes
+
+cd /MicroSuite/src/HDSearch/bucket_service/service
+make clean; make
+./bucket_server /home/image_feature_vectors.dat 0.0.0.0:50050 2 1 0 4 &
+./bucket_server /home/image_feature_vectors.dat 0.0.0.0:50051 2 1 1 4 &
+./bucket_server /home/image_feature_vectors.dat 0.0.0.0:50052 2 1 2 4 &
+./bucket_server /home/image_feature_vectors.dat 0.0.0.0:50053 2 1 3 4 &
+
+
+cd /MicroSuite/src/HDSearch/mid_tier_service/service
+make clean; make
+touch bucket_servers_IP.txt
+echo "0.0.0.0:50050" > bucket_servers_IP.txt
+echo "0.0.0.0:50051" >> bucket_servers_IP.txt
+echo "0.0.0.0:50052" >> bucket_servers_IP.txt
+echo "0.0.0.0:50053" >> bucket_servers_IP.txt
+./mid_tier_server 1 13 1 4 bucket_servers_IP.txt /home/image_feature_vectors.dat 2 0.0.0.0:50054 1 1 1 0 &
+
+
+cd /MicroSuite/src/HDSearch/load_generator/
+make clean; make
+./load_generator_open_loop /home/image_feature_vectors.dat ./results/ 1 1 50 0.0.0.0:50054 dummy1 dummy2 dummy3
+
+
+
+
+
+##Recommend
+
+### download and prepare dataset
+
+wget https://www.mlpack.org/datasets/ml-20m/ratings-only.csv.gz
+gunzip ratings-only.csv.gz
+mv ./ratings-only.csv /home/user_to_movie_ratings.csv
+cd /home
+tail -n +2 user_to_movie_ratings.csv | head -n 40000 &> user_to_movie_ratings_small.csv
+rm /home/user_to_movie_ratings_shard*.txt;shards_num=4;split -d --additional-suffix=.txt -l $(($(($(wc -l < /home/user_to_movie_ratings_small.csv)+shards_num-1))/shards_num)) /home/user_to_movie_ratings_small.csv /home/user_to_movie_ratings_shard
+head -4000 /home/user_to_movie_ratings_small.csv | shuf --random-source=<(yes 42)  | head -n1000 > /home/recommend_query_set.csv
+
+### setup processes
+
+cd /MicroSuite/src/Recommend/cf_service/service
+make clean; make
+./cf_server /home/user_to_movie_ratings_shard00.txt 0.0.0.0:50050 1 1 0 4 &
+./cf_server /home/user_to_movie_ratings_shard01.txt 0.0.0.0:50051 1 1 1 4 &
+./cf_server /home/user_to_movie_ratings_shard02.txt 0.0.0.0:50052 1 1 2 4 &
+./cf_server /home/user_to_movie_ratings_shard03.txt 0.0.0.0:50053 1 1 3 4 &
+
+
+cd /MicroSuite/src/Recommend/recommender_service/service/
+make clean; make
+touch lookup_servers_IP.txt
+echo "0.0.0.0:50050" > lookup_servers_IP.txt
+echo "0.0.0.0:50051" >> lookup_servers_IP.txt
+echo "0.0.0.0:50052" >> lookup_servers_IP.txt
+echo "0.0.0.0:50053" >> lookup_servers_IP.txt
+./mid_tier_server 4 lookup_servers_IP.txt 0.0.0.0:50054 1 1 1 &
+
+
+cd /MicroSuite/src/Recommend/load_generator/
+make clean; make
+./load_generator_open_loop /home/recommend_query_set.csv results 1 20 0.0.0.0:50054
+
+
+
+
+
+
+
+##Recommend
+
+### setup configuration
+
+cp /etc/memcached.conf /etc/memcached_server0.conf
+cp /etc/memcached.conf /etc/memcached_server1.conf
+cp /etc/memcached.conf /etc/memcached_server2.conf
+cp /etc/memcached.conf /etc/memcached_server3.conf
+
+#Set Correct Memcached Ports
+sed -i 's/11211/11212/' /etc/memcached_server1.conf
+sed -i 's/11211/11213/' /etc/memcached_server2.conf
+sed -i 's/11211/11214/' /etc/memcached_server3.conf
+
+sed -i 's/-m 64/-m 131072/' /etc/memcached_server0.conf
+sed -i 's/-m 64/-m 131072/' /etc/memcached_server1.conf
+sed -i 's/-m 64/-m 131072/' /etc/memcached_server2.conf
+sed -i 's/-m 64/-m 131072/' /etc/memcached_server3.conf
+
+#Remove Previous Memcached Configuration
+sudo rm /lib/systemd/system/memcached.service
+sudo rm /etc/memcached.conf
+
+#Restart Service
+sudo service memcached restart
+sleep 5
+
+pid=$(cat /var/run/memcached_server0.pid); sudo taskset -cp 1,2,3,4 $pid
+pid=$(cat /var/run/memcached_server1.pid); sudo taskset -cp 6,7,8,9 $pid
+pid=$(cat /var/run/memcached_server2.pid); sudo taskset -cp 11,12,13,14 $pid
+pid=$(cat /var/run/memcached_server3.pid); sudo taskset -cp 16,17,18,19 $pid
+
+cd /MicroSuite/src/Router/protoc_files
+make clean; make
+cd /MicroSuite/src/Router/lookup_service/service
+make clean; make
+cd /MicroSuite/src/Router/mid_tier_service/service/
+make clean; make
+cd /MicroSuite/src/Router/load_generator
+make clean; make
+
+
+
+### download and prepare dataset
+
+wget https://akshithasriraman.eecs.umich.edu/dataset/Router/twitter_requests_data_set.dat
+mv ./twitter_requests_data_set.dat /home
+
+
+
+### setup processes
+
+cd /MicroSuite/src/Router/lookup_service/service
+taskset -c 0 ./lookup_server 0.0.0.0:50050 11211 1 0 &
+taskset -c 5 ./lookup_server 0.0.0.0:50051 11212 1 1 &
+taskset -c 10 ./lookup_server 0.0.0.0:50052 11213 1 2 &
+taskset -c 15 ./lookup_server 0.0.0.0:50053 11214 1 3 &
+
+
+cd /MicroSuite/src/Router/mid_tier_service/service/
+touch lookup_servers_IP.txt
+echo '0.0.0.0:50050' > lookup_servers_IP.txt
+echo '0.0.0.0:50051' >> lookup_servers_IP.txt
+echo '0.0.0.0:50052' >> lookup_servers_IP.txt
+echo '0.0.0.0:50053' >> lookup_servers_IP.txt
+./mid_tier_server 4 lookup_servers_IP.txt 0.0.0.0:50054 1 1 1 3 &
+
+
+### warm up - takes a lot of time
+
+./load_generator_open_loop_warmup /home/twitter_requests_data_set.dat ./results 1 10000000 0.0.0.0:50054 0 10000000
+
+### run
+
+./load_generator_open_loop /home/twitter_requests_data_set.dat ./results 1 50 0.0.0.0:50054 0 50
+
+
+
+
+
+
