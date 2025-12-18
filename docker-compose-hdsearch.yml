@@ -1,9 +1,9 @@
 version: "3"
 services:
-  hdsearch:
-    image: msuite-hdsearch-test:latest
+  hdsearch_v2:
+    image: msuite-hdsearch-fixed
     volumes:
-        - /home/tsazei01/shared_datasets/HDSearch/image_feature_vectors.dat
+        - /home/tsazei01/shared_datasets/HDSearch:/home
     stdin_open: true # docker run -i
     tty: true        # docker run -t
     privileged: true

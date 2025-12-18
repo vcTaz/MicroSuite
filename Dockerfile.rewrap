@@ -1,0 +1,2 @@
+# Dockerfile.rewrap
+FROM msuite-hdsearch-test:latest

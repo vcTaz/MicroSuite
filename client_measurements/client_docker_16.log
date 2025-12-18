@@ -1,0 +1,42 @@
+--- Waiting for midtier service ---
+Waiting for midtier:50054...
+Waiting for midtier:50054...
+Waiting for midtier:50054...
+Waiting for midtier:50054...
+Waiting for midtier:50054...
+Waiting for midtier:50054...
+Waiting for midtier:50054...
+Waiting for midtier:50054...
+Waiting for midtier:50054...
+Waiting for midtier:50054...
+Waiting for midtier:50054...
+Midtier service is ready.
+--- Starting client load generator ---
+1 1 1 1.042 1.084 1.121 1.151 1.179 1.215 1.261 1.304 1.352 1.386 1.453 5.039 
+ Total response time 
+1.042 1.084 1.121 1.151 1.179 1.215 1.261 1.304 1.352 1.386 1.453 5.039 
+
+ Index creation time 0 0 0 0 0 0 0 0 0 0 0 0 
+ Update index util time 0 0 0 0 0 0 0 0 0 0 0 0.308 
+ Unpack loadgen request time 0.017 0.017 0.017 0.017 0.018 0.018 0.018 0.018 0.018 0.02 0.033 0.046 
+ Get point ids time 
+0.063 0.082 0.107 0.126 0.159 0.201 0.271 0.304 0.34 0.366 0.406 0.433 
+ Total time taken by index server: 
+0.223 0.247 0.271 0.293 0.326 0.371 0.436 0.471 0.509 0.539 0.58 0.776 
+ Get bucket responses time 
+1.75284e+12 1.75284e+12 1.75284e+12 1.75284e+12 1.75284e+12 1.75284e+12 1.75284e+12 1.75284e+12 1.75284e+12 1.75284e+12 1.75284e+12 1.75284e+12 
+ Create bucket request time 0 0 0 0 0 0 0 0 0 0 0 0 
+ Unpack bucket request time 0.006 0.007 0.007 0.007 0.007 0.007 0.007 0.021 0.021 0.022 0.022 0.037 
+ Calculate knn time 
+0.041 0.042 0.043 0.062 0.084 0.11 0.121 0.128 0.134 0.138 0.145 0.16 
+ Pack bucket response time 0.001 0.001 0.001 0.001 0.001 0.002 0.002 0.002 0.002 0.002 0.002 0.016 
+ Unpack bucket response time 0.001 0.001 0.001 0.001 0.002 0.002 0.002 0.002 0.002 0.002 0.002 0.002 
+ Merge time 0.014 0.014 0.015 0.015 0.015 0.015 0.016 0.029 0.03 0.034 0.045 0.051 
+ Pack index response time 0.014 0.014 0.015 0.015 0.015 0.015 0.016 0.029 0.03 0.034 0.045 0.051 
+ Unpack index response time 0 0 0 0 0 0 0 0.001 0.001 0.001 0.001 0.004 
+ 0.000100033
+got kill ack
+[libprotobuf FATAL /usr/local/include/google/protobuf/repeated_field.h:1535] CHECK failed: (index) < (current_size_): 
+terminate called after throwing an instance of 'google::protobuf::FatalException'
+  what():  CHECK failed: (index) < (current_size_): 
+bash: line 12:    31 Aborted                 (core dumped) ./load_generator_open_loop /home/image_feature_vectors.dat ./results/ 1 30 100 midtier:50054 dummy1 dummy2 dummy3

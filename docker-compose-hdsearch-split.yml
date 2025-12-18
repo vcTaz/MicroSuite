@@ -1,0 +1,96 @@
+# This docker-compose file runs three separate services, but only starts
+# one instance of the bucket server. It includes readiness checks.
+version: "3.8"
+
+services:
+  bucket:
+    image: msuite-hdsearch-fixed
+    container_name: hdsearch_bucket
+    # Expose the port for the single bucket server.
+    ports:
+      - "50050:50050"
+    # Use the volume mount for the dataset as specified.
+    volumes:
+      - /home/tsazei01/shared_datasets/HDSearch:/home
+    stdin_open: true
+    tty: true
+    privileged: true
+    cpuset: '0'
+    environment:
+      http_proxy: http://proxy.cs.ucy.ac.cy:8008
+      https_proxy: http://proxy.cs.ucy.ac.cy:8008
+      no_proxy: localhost,127.0.0.1,bucket,midtier,client
+    command: >
+      bash -c "
+        echo '--- Starting single bucket server ---' && \
+        cd /MicroSuite/src/HDSearch/bucket_service/service && \
+        # Start one server, listening on 0.0.0.0 to be reachable from other containers.
+        # The last argument '1' indicates there is only 1 bucket server total.
+        ./bucket_server /home/image_feature_vectors.dat 0.0.0.0:50050 2 1 0 1 && \
+        tail -f /dev/null
+      "
+
+  midtier:
+    image: msuite-hdsearch-fixed
+    container_name: hdsearch_midtier
+    ports:
+      - "50054:50054"
+    volumes:
+      - /home/tsazei01/shared_datasets/HDSearch:/home
+    stdin_open: true
+    tty: true
+    privileged: true
+    cpuset: '2'
+    # depends_on controls startup order, but the command handles readiness.
+    depends_on:
+      - bucket
+    environment:
+      http_proxy: http://proxy.cs.ucy.ac.cy:8008
+      https_proxy: http://proxy.cs.ucy.ac.cy:8008
+      no_proxy: localhost,127.0.0.1,bucket,midtier,client
+    command: >
+      bash -c "
+        # Wait until the bucket service is actually listening on its port.
+        echo '--- Waiting for bucket service ---' && \
+        while ! nc -z bucket 50050; do echo 'Waiting for bucket:50050...'; sleep 1; done && \
+        echo 'Bucket service is ready.' && \
+        
+        echo '--- Starting midtier server ---' && \
+        cd /MicroSuite/src/HDSearch/mid_tier_service/service && \
+        # Configure midtier to connect to the bucket service by its Docker network name.
+        echo 'bucket:50050' > bucket_servers_IP.txt && \
+        # The argument after the txt file is '1' for the number of bucket servers.
+        ./mid_tier_server 1 13 1 1 bucket_servers_IP.txt /home/image_feature_vectors.dat 2 0.0.0.0:50054 1 1 1 0 && \
+        tail -f /dev/null
+      "
+
+  client:
+    image: msuite-hdsearch-fixed
+    container_name: hdsearch_client
+    volumes:
+      - /home/tsazei01/shared_datasets/HDSearch:/home
+    stdin_open: true
+    tty: true
+    privileged: true
+    cpuset: '4'
+    depends_on:
+      - midtier
+    environment:
+      http_proxy: http://proxy.cs.ucy.ac.cy:8008
+      https_proxy: http://proxy.cs.ucy.ac.cy:8008
+      no_proxy: localhost,127.0.0.1,bucket,midtier,client
+    command: >
+      bash -c "
+        # Wait until the midtier service is actually listening on its port.
+        echo '--- Waiting for midtier service ---' && \
+        while ! nc -z midtier 50054; do echo 'Waiting for midtier:50054...'; sleep 1; done && \
+        echo 'Midtier service is ready.' && \
+
+        echo '--- Starting client load generator ---' && \
+        cd /MicroSuite/src/HDSearch/load_generator && \
+        mkdir -p ./results && \
+        # Connect to the midtier service by its Docker network name and correct port.
+        ./load_generator_open_loop /home/image_feature_vectors.dat ./results/ 1 30 100 midtier:50054 dummy1 dummy2 dummy3 && \
+        echo '--- Load generator finished. Keeping container alive. ---' && \
+        tail -f /dev/null
+      "
