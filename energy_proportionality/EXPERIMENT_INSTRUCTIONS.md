@@ -55,7 +55,7 @@ python3 --version
 ### 1.1 Navigate to Project Directory
 
 ```bash
-cd /home/taz/MicroSuite/energy_proportionality
+cd /home/tsazei01/MicroSuite/energy_proportionality
 ```
 
 ### 1.2 Setup Disaggregated Memory Simulation
@@ -114,7 +114,7 @@ Update the dataset path in the docker-compose file if needed:
 Run the complete experiment with baseline and multiple checkpoint cycles:
 
 ```bash
-cd /home/taz/MicroSuite/energy_proportionality
+cd /home/tsazei01/MicroSuite/energy_proportionality
 
 # Syntax: ./scripts/run_experiment.sh <name> <num_runs> <checkpoint_dir> <idle_seconds>
 ./scripts/run_experiment.sh energy_test 10 /mnt/disaggregated_memory 5
@@ -146,7 +146,7 @@ If you prefer to run each step manually:
 #### Start Services
 
 ```bash
-cd /home/taz/MicroSuite/energy_proportionality/configs
+cd /home/tsazei01/MicroSuite/energy_proportionality/configs
 
 # Start all services
 docker-compose -f docker-compose-checkpoint.yml up -d
@@ -158,7 +158,7 @@ docker ps
 #### Monitor C6 State (in separate terminal)
 
 ```bash
-cd /home/taz/MicroSuite/energy_proportionality
+cd /home/tsazei01/MicroSuite/energy_proportionality
 
 # Monitor CPUs 0, 2, 4 (where services are pinned)
 ./scripts/monitor_c6_state.sh 0,2,4 1 c6_monitor.csv
@@ -190,7 +190,7 @@ sleep 10
 #### Cleanup
 
 ```bash
-cd /home/taz/MicroSuite/energy_proportionality/configs
+cd /home/tsazei01/MicroSuite/energy_proportionality/configs
 docker-compose -f docker-compose-checkpoint.yml down
 ```
 
@@ -202,7 +202,7 @@ docker-compose -f docker-compose-checkpoint.yml down
 
 ```bash
 # List experiment results
-ls -la /home/taz/MicroSuite/energy_proportionality/results/
+ls -la /home/tsazei01/MicroSuite/energy_proportionality/results/
 
 # View the results CSV
 cat results/energy_test_*/results.csv
@@ -211,7 +211,7 @@ cat results/energy_test_*/results.csv
 ### 4.2 Run Analysis Script
 
 ```bash
-cd /home/taz/MicroSuite/energy_proportionality
+cd /home/tsazei01/MicroSuite/energy_proportionality
 
 # Analyze experiment results
 python3 analysis/analyze_results.py results/energy_test_*/
@@ -350,7 +350,7 @@ ls -la /mnt/disaggregated_memory/
 
 ```bash
 # === FULL EXPERIMENT ===
-cd /home/taz/MicroSuite/energy_proportionality
+cd /home/tsazei01/MicroSuite/energy_proportionality
 sudo ./scripts/setup_disaggregated_memory.sh /mnt/disaggregated_memory 8G
 ./scripts/run_experiment.sh my_experiment 10 /mnt/disaggregated_memory 5
 python3 analysis/analyze_results.py results/my_experiment_*/
