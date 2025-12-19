@@ -1,8 +1,5 @@
 version: "3.8"
 
-# Docker Compose configuration for µSuite with CRIU checkpoint/restore support
-# Enables container snapshotting to disaggregated memory for energy proportionality researches
-
 services:
   bucket:
     image: msuite-hdsearch-fixed
@@ -10,12 +7,12 @@ services:
     ports:
       - "50050:50050"
     volumes:
-      - /home/tsazei01/shared_datasets/HDSearch:/home
+      - /home/tsazei01/shared_datasets/HDSearch:/home:ro
       - ${CHECKPOINT_DIR:-/tmp/checkpoints}:/checkpoints
     stdin_open: true
     tty: true
     privileged: true
-    cpuset: '0'
+    cpuset: "0"
     security_opt:
       - seccomp:unconfined
     cap_add:
@@ -24,25 +21,27 @@ services:
       - NET_ADMIN
     environment:
       - CHECKPOINT_DIR=/checkpoints
+      - no_proxy=localhost,127.0.0.1,bucket,midtier,client
     command: >
-      bash -c "
+      bash -lc "
         echo '[BUCKET] Starting bucket server...' &&
         cd /MicroSuite/src/HDSearch/bucket_service/service &&
         ./bucket_server /home/image_feature_vectors.dat 0.0.0.0:50050 2 1 0 1 &&
         tail -f /dev/null
       "
+
   midtier:
     image: msuite-hdsearch-fixed
     container_name: hdsearch_midtier
     ports:
       - "50054:50054"
     volumes:
-      - - /home/tsazei01/shared_datasets/HDSearch:/home
+      - /home/tsazei01/shared_datasets/HDSearch:/home:ro
       - ${CHECKPOINT_DIR:-/tmp/checkpoints}:/checkpoints
     stdin_open: true
     tty: true
     privileged: true
-    cpuset: '2'
+    cpuset: "2"
     security_opt:
       - seccomp:unconfined
     cap_add:
@@ -50,14 +49,15 @@ services:
       - SYS_ADMIN
       - NET_ADMIN
     depends_on:
-      bucket
+      - bucket
     environment:
       - CHECKPOINT_DIR=/checkpoints
+      - no_proxy=localhost,127.0.0.1,bucket,midtier,client
     command: >
-      bash -c "
-        echo '[MIDTIER] Waiting for bucket service...' &&
+      bash -lc "
+        echo '[MIDTIER] Waiting for bucket...' &&
         while ! nc -z bucket 50050; do sleep 1; done &&
-        echo '[MIDTIER] Bucket ready, starting midtier server...' &&
+        echo '[MIDTIER] Starting midtier server...' &&
         cd /MicroSuite/src/HDSearch/mid_tier_service/service &&
         echo 'bucket:50050' > bucket_servers_IP.txt &&
         ./mid_tier_server 1 13 1 1 bucket_servers_IP.txt /home/image_feature_vectors.dat 2 0.0.0.0:50054 1 1 1 0 &&
@@ -68,29 +68,30 @@ services:
     image: msuite-hdsearch-fixed
     container_name: hdsearch_client
     volumes:
-      - - /home/tsazei01/shared_datasets/HDSearch:/home
+      - /home/tsazei01/shared_datasets/HDSearch:/home:ro
       - ${CHECKPOINT_DIR:-/tmp/checkpoints}:/checkpoints
       - ./results:/results
     stdin_open: true
     tty: true
     privileged: true
-    cpuset: '4'
+    cpuset: "4"
     security_opt:
       - seccomp:unconfined
     cap_add:
       - SYS_PTRACE
       - SYS_ADMIN
     depends_on:
-      midtier
+      - midtier
     environment:
       - CHECKPOINT_DIR=/checkpoints
       - QPS=${QPS:-100}
       - DURATION=${DURATION:-30}
+      - no_proxy=localhost,127.0.0.1,bucket,midtier,client
     command: >
-      bash -c "
-        echo '[CLIENT] Waiting for midtier service...' &&
+      bash -lc "
+        echo '[CLIENT] Waiting for midtier...' &&
         while ! nc -z midtier 50054; do sleep 1; done &&
-        echo '[CLIENT] Midtier ready, starting load generator...' &&
+        echo '[CLIENT] Starting load generator...' &&
         cd /MicroSuite/src/HDSearch/load_generator &&
         mkdir -p /results &&
         ./load_generator_open_loop /home/image_feature_vectors.dat /results/ 1 ${DURATION:-30} ${QPS:-100} midtier:50054 dummy1 dummy2 dummy3 &&
