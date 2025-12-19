@@ -10,7 +10,7 @@ services:
     ports:
       - "50050:50050"
     volumes:
-      - ${DATASET_PATH:-/home/shared_datasets/HDSearch}:/home
+      - /home/tsazei01/shared_datasets/HDSearch:/home
       - ${CHECKPOINT_DIR:-/tmp/checkpoints}:/checkpoints
     stdin_open: true
     tty: true
@@ -28,21 +28,16 @@ services:
       bash -c "
         echo '[BUCKET] Starting bucket server...' &&
         cd /MicroSuite/src/HDSearch/bucket_service/service &&
-        ./bucket_server /home/image_feature_vectors.dat 0.0.0.0:50050 2 1 0 1
+        ./bucket_server /home/image_feature_vectors.dat 0.0.0.0:50050 2 1 0 1 &&
+        tail -f /dev/null
       "
-    healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "50050"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
   midtier:
     image: msuite-hdsearch-fixed
     container_name: hdsearch_midtier
     ports:
       - "50054:50054"
     volumes:
-      - ${DATASET_PATH:-/home/shared_datasets/HDSearch}:/home
+      - - /home/tsazei01/shared_datasets/HDSearch:/home
       - ${CHECKPOINT_DIR:-/tmp/checkpoints}:/checkpoints
     stdin_open: true
     tty: true
@@ -55,8 +50,7 @@ services:
       - SYS_ADMIN
       - NET_ADMIN
     depends_on:
-      bucket:
-        condition: service_healthy
+      bucket
     environment:
       - CHECKPOINT_DIR=/checkpoints
     command: >
@@ -66,19 +60,15 @@ services:
         echo '[MIDTIER] Bucket ready, starting midtier server...' &&
         cd /MicroSuite/src/HDSearch/mid_tier_service/service &&
         echo 'bucket:50050' > bucket_servers_IP.txt &&
-        ./mid_tier_server 1 13 1 1 bucket_servers_IP.txt /home/image_feature_vectors.dat 2 0.0.0.0:50054 1 1 1 0
+        ./mid_tier_server 1 13 1 1 bucket_servers_IP.txt /home/image_feature_vectors.dat 2 0.0.0.0:50054 1 1 1 0 &&
+        tail -f /dev/null
       "
-    healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "50054"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
 
   client:
     image: msuite-hdsearch-fixed
     container_name: hdsearch_client
     volumes:
-      - ${DATASET_PATH:-/home/shared_datasets/HDSearch}:/home
+      - - /home/tsazei01/shared_datasets/HDSearch:/home
       - ${CHECKPOINT_DIR:-/tmp/checkpoints}:/checkpoints
       - ./results:/results
     stdin_open: true
@@ -91,8 +81,7 @@ services:
       - SYS_PTRACE
       - SYS_ADMIN
     depends_on:
-      midtier:
-        condition: service_healthy
+      midtier
     environment:
       - CHECKPOINT_DIR=/checkpoints
       - QPS=${QPS:-100}
@@ -105,5 +94,6 @@ services:
         cd /MicroSuite/src/HDSearch/load_generator &&
         mkdir -p /results &&
         ./load_generator_open_loop /home/image_feature_vectors.dat /results/ 1 ${DURATION:-30} ${QPS:-100} midtier:50054 dummy1 dummy2 dummy3 &&
-        echo '[CLIENT] Load generator finished.'
+        echo '[CLIENT] finished' &&
+        tail -f /dev/null
       "
