@@ -1,7 +1,0 @@
---- Waiting for bucket service ---
-Waiting for bucket:50050...
-Waiting for bucket:50050...
-Bucket service is ready.
---- Starting midtier server ---
-Assuming 2048 dimensions
-Server listening on 0.0.0.0:50054

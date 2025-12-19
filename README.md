@@ -5,11 +5,41 @@
 µSuite was originally written to evaluate OS and network overheads faced by microservices. You can find more details about µSuite in our IISWC paper (http://akshithasriraman.eecs.umich.edu/pubs/IISWC2018-%CE%BCSuite-preprint.pdf).
 
 This µSuite Fork has been amended by ALPS in order to achieve the following:
-- Correct and confirm all the installation/compilations commands to run on Ubuntu Linux 18.04
-- Provide instructions to compile and run docker and prepare a docker image with the complete µSuite for easier deployment
+- Correct and confirm all the installation/compilation commands to run on Ubuntu Linux 18.04
+- Provide instructions to compile and run Docker and prepare a Docker image with the complete µSuite for easier deployment
 - Provide instructions and the configuration to run the applications on single node using docker-compose.yaml
-- Provide intrusctions and the configuration to run the applications on multiple nodes using docker-compose-swarm.yml
-- Provide instructions and source code to run the application on single node allowing the system to enter c6.
+- Provide instructions and the configuration to run the applications on multiple nodes using docker-compose-swarm.yml
+- Provide instructions and source code to run the application on single node allowing the system to enter C6 deep sleep state
+- **Research resource disaggregation and container snapshotting for improved energy proportionality**
+
+## Energy Proportionality Research Module
+
+This fork includes a complete research module for investigating resource disaggregation and container snapshotting:
+
+```
+energy_proportionality/
+├── scripts/           # Checkpoint/restore, C6 monitoring, experiment runner
+├── configs/           # Docker compose with CRIU support
+├── analysis/          # Python analysis tools
+└── results/           # Experiment output
+```
+
+**Documentation:**
+- **[Module README](energy_proportionality/README.md)** - Quick start guide and usage
+- **[Research Overview](energy_proportionality/RESOURCE_DISAGGREGATION_ENERGY_PROPORTIONALITY.md)** - High-level investigation of resource disaggregation
+- **[Implementation Guide](energy_proportionality/IMPLEMENTATION_GUIDE.md)** - Technical implementation details
+
+**Quick Start:**
+```bash
+# Setup disaggregated memory simulation
+sudo ./energy_proportionality/scripts/setup_disaggregated_memory.sh
+
+# Run experiment
+./energy_proportionality/scripts/run_experiment.sh test_run 10
+
+# Analyze results
+python3 energy_proportionality/analysis/analyze_results.py energy_proportionality/results/test_run_*/
+```
 
 # License & Copyright
 µSuite is free software; you can redistribute it and/or modify it under the terms of the BSD License as published by the Open Source Initiative, revised version.
@@ -167,7 +197,7 @@ mv ./twitter_requests_data_set.dat /home
 mv ./twitter_requests_data_set.txt /home
 
 ```
-### Memchache server - confirm it runs
+### Memcached server - confirm it runs
 ```
 service memcached restart
 
@@ -202,9 +232,9 @@ wget https://akshithasriraman.eecs.umich.edu/dataset/SetAlgebra/wordIDs_mapped_t
 mv ./wordIDs_mapped_to_posting_lists.txt /home
 
 ```
-### Split dataset to multiple shrads, one per insersection intersection_server 
-### (if only one intersection_server then use whole file). 
-### In this example we split in 10 shrads (replace shards_num=10 below with number of shrads you would like)
+### Split dataset to multiple shards, one per intersection server
+### (if only one intersection_server then use whole file).
+### In this example we split in 10 shards (replace shards_num=10 below with number of shards you would like)
 ```
 rm /home/setalgebra_shrad*.txt;shrads_num=10;split -d --additional-suffix=.txt -l $(($(($(wc -l < /home/wordIDs_mapped_to_posting_lists.txt)+shrads_num-1))/shrads_num)) /home/wordIDs_mapped_to_posting_lists.txt /home/setalgebra_shrad
 
@@ -215,7 +245,7 @@ rm /home/setalgebra_shrad*.txt;shrads_num=10;split -d --additional-suffix=.txt -
 shuf -n 100 /home/wordIDs_mapped_to_posting_lists.txt > /home/setalgebra_query_set.txt
 
 ```
-### Interesection server
+### Intersection server
 ### ./<intersection_server> \<IP address:Port Number> \<path to dataset> <num of cores: -1 if you want all cores on the machine> \<intersection server number> \<number of intersection servers in the system>
 ```
 cd /MicroSuite/src/SetAlgebra/intersection_service/service/
@@ -249,9 +279,9 @@ gunzip ratings-only.csv.gz
 mv ./ratings-only.csv /home/user_to_movie_ratings.csv
 
 ```
-### Split dataset to multiple shrads, one per cf server 
-### (if only one cf_server then use whole file). 
-### In this example we split in 100 shrads (replace shards_num=100 below with number of shrads you would like)
+### Split dataset to multiple shards, one per cf server
+### (if only one cf_server then use whole file).
+### In this example we split in 100 shards (replace shards_num=100 below with number of shards you would like)
 ```
 rm /home/user_to_movie_ratings_shard*.txt;shards_num=100;split -d --additional-suffix=.txt -l $(($(($(wc -l < /home/user_to_movie_ratings.csv)+shards_num-1))/shards_num)) /home/user_to_movie_ratings.csv /home/user_to_movie_ratings_shard
 
@@ -302,7 +332,7 @@ mkdir ./results
 
 # (5) ** Commands used to compile the benchmarks and prepare the docker image **
 
-## Install dependancies for microsuite
+## Install dependencies for µSuite
 ```
 su
 apt-get update
@@ -437,7 +467,8 @@ cd ../../load_generator/
 make
 
 ```
-## mecachaded installation for this benchmark. Guide followed -> https://www.digitalocean.com/community/tutorials/how-to-install-and-secure-memcached-on-ubuntu-18-04
+## Memcached installation for this benchmark
+### Guide: https://www.digitalocean.com/community/tutorials/how-to-install-and-secure-memcached-on-ubuntu-18-04
 ```
 apt install memcached
 apt install libmemcached-tools

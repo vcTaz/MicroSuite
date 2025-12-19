@@ -1,0 +1,43 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.env
+*.egg-info/
+dist/
+build/
+
+# Logs and data
+*.log
+data/
+logs/
+
+# Docker
+*.tar
+*.tar.gz
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.orig
+
+# Build artifacts
+*.o
+*.a
+*.out
