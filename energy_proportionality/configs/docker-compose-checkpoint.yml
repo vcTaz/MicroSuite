@@ -1,7 +1,7 @@
 version: "3.8"
 
 # Docker Compose configuration for µSuite with CRIU checkpoint/restore support
-# Enables container snapshotting to disaggregated memory for energy proportionality research
+# Enables container snapshotting to disaggregated memory for energy proportionality researches
 
 services:
   bucket:
