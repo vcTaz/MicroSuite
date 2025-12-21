@@ -17,24 +17,21 @@ Complete list of all requirements to run the energy proportionality experiments.
 
 ---
 
-## Container Runtime (Choose One)
+## Container Runtime (Podman)
 
-The experiments support **both Docker and Podman**. Podman is recommended as it has native CRIU support without requiring experimental mode.
+This project uses Podman for container orchestration. Podman has native CRIU checkpoint support without requiring experimental mode.
 
-### Runtime Comparison
-
-| Feature | Docker | Podman |
-|---------|--------|--------|
-| CRIU Support | Requires experimental mode | Native support |
-| Root Required | Yes (daemon) | No (rootless available) |
-| Checkpoint Command | `docker checkpoint create` | `podman container checkpoint` |
-| Checkpoint Format | Directory | Tar archive |
+### Podman Advantages
+- Native checkpoint/restore without experimental mode
+- Daemonless architecture
+- Rootless container support
+- Compatible with Docker images and compose files
 
 ---
 
 ## Software Dependencies
 
-### Option A: Podman (Recommended)
+### 1. Podman and Podman Compose
 
 ```bash
 # Install Podman
@@ -47,30 +44,6 @@ podman-compose --version  # Required: 1.0+
 
 # Test checkpoint support (no extra config needed)
 podman info | grep -i checkpoint
-```
-
-**Advantages of Podman:**
-- Native checkpoint/restore without experimental mode
-- Daemonless architecture
-- Rootless container support
-- Compatible with Docker images
-
-### Option B: Docker
-
-```bash
-# Install Docker
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-
-# Add user to docker group
-sudo usermod -aG docker $USER
-
-# Install Docker Compose
-sudo apt-get install -y docker-compose
-
-# Verify installation
-docker --version          # Required: 24.0+
-docker-compose --version  # Required: 1.29+
 ```
 
 ### 2. CRIU (Checkpoint/Restore In Userspace)
@@ -159,45 +132,13 @@ state3: C6
 
 ---
 
-## Docker Configuration
+## µSuite Requirements
 
-### Enable Experimental Features
-
-```bash
-# Create or edit daemon.json
-sudo tee /etc/docker/daemon.json << 'EOF'
-{
-    "experimental": true,
-    "storage-driver": "overlay2",
-    "live-restore": true
-}
-EOF
-
-# Restart Docker
-sudo systemctl restart docker
-
-# Verify
-docker info | grep -i experimental
-# Should show: Experimental: true
-```
-
-### Required Docker Capabilities
-
-The containers need these capabilities (configured in docker-compose):
-- `SYS_PTRACE` - Process tracing for CRIU
-- `SYS_ADMIN` - System administration for checkpointing
-- `NET_ADMIN` - Network namespace management
-- `seccomp:unconfined` - Disable seccomp for CRIU compatibility
-
----
-
-## µSuite Dependencies
-
-### Pre-built Docker Image
+### Pre-built Container Image
 
 ```bash
 # Pull or verify the µSuite image exists
-docker images | grep msuite-hdsearch
+podman images | grep msuite-hdsearch
 
 # If not available, build from MicroSuite repository
 # (See main README.md section 5 for build instructions)
@@ -264,21 +205,27 @@ sudo perf stat ls
 
 ---
 
-## Verification Checklist
+## Verification Script
 
-Run this script to verify all prerequisites:
+Run the verification script to check all prerequisites:
+
+```bash
+./scripts/verify_prerequisites.sh
+```
+
+Or use this manual check:
 
 ```bash
 #!/bin/bash
 echo "=== Prerequisites Verification ==="
 
-# Docker
-echo -n "Docker: "
-docker --version 2>/dev/null && echo "OK" || echo "MISSING"
+# Podman
+echo -n "Podman: "
+podman --version 2>/dev/null && echo "OK" || echo "MISSING"
 
-# Docker experimental
-echo -n "Docker Experimental: "
-docker info 2>/dev/null | grep -q "Experimental: true" && echo "OK" || echo "DISABLED"
+# Podman Compose
+echo -n "Podman Compose: "
+podman-compose --version 2>/dev/null && echo "OK" || echo "MISSING"
 
 # CRIU
 echo -n "CRIU: "
@@ -312,9 +259,9 @@ which turbostat >/dev/null 2>&1 && echo "OK" || echo "MISSING (optional)"
 echo -n "HDSearch Dataset: "
 ls /home/shared_datasets/HDSearch/image_feature_vectors.dat >/dev/null 2>&1 && echo "OK" || echo "MISSING"
 
-# Docker image
-echo -n "µSuite Docker Image: "
-docker images | grep -q msuite-hdsearch && echo "OK" || echo "MISSING"
+# Podman image
+echo -n "µSuite Podman Image: "
+podman images | grep -q msuite-hdsearch && echo "OK" || echo "MISSING"
 
 echo "=== Verification Complete ==="
 ```
@@ -323,7 +270,7 @@ echo "=== Verification Complete ==="
 
 ## Installation Summary
 
-### Quick Install - Podman (Recommended)
+### Quick Install
 
 ```bash
 # 1. System packages with Podman
@@ -349,52 +296,6 @@ sudo criu check
 podman info
 ```
 
-### Quick Install - Docker (Alternative)
-
-```bash
-# 1. System packages with Docker
-sudo apt-get update
-sudo apt-get install -y \
-    criu \
-    docker.io \
-    docker-compose \
-    net-tools \
-    netcat \
-    numactl \
-    python3 \
-    linux-tools-common \
-    linux-tools-$(uname -r)
-
-# 2. Docker configuration (required for checkpoint support)
-sudo usermod -aG docker $USER
-sudo tee /etc/docker/daemon.json << 'EOF'
-{
-    "experimental": true,
-    "storage-driver": "overlay2"
-}
-EOF
-sudo systemctl restart docker
-
-# 3. Dataset
-mkdir -p /home/shared_datasets/HDSearch
-wget -P /home/shared_datasets/HDSearch \
-    https://akshithasriraman.eecs.umich.edu/dataset/HDSearch/image_feature_vectors.dat
-
-# 4. Verify
-sudo criu check
-docker info | grep Experimental
-```
-
-### Force Specific Runtime
-
-```bash
-# Force Docker even if Podman is available
-export CONTAINER_RUNTIME=docker
-
-# Force Podman
-export CONTAINER_RUNTIME=podman
-```
-
 ---
 
 ## Troubleshooting Installation
@@ -407,16 +308,6 @@ echo 1 | sudo tee /proc/sys/kernel/soft_dirty
 
 # Error: "Network namespace is not available"
 # Kernel needs CONFIG_NET_NS=y (usually enabled by default)
-```
-
-### Docker Checkpoint Not Working
-
-```bash
-# Ensure runc is updated
-docker info | grep -i runc
-
-# Check containerd version
-containerd --version  # Should be 1.6+
 ```
 
 ### Turbostat Permission Denied
@@ -449,9 +340,5 @@ cat /proc/cmdline | grep -i idle
 | Linux Kernel | 5.15 | 6.1 |
 | Podman | 3.4 | 4.7 |
 | Podman Compose | 1.0 | 1.0.6 |
-| Docker | 24.0 | 25.0 |
-| Docker Compose | 1.29 | 2.21 |
 | CRIU | 3.17 | 3.18 |
 | Python | 3.6 | 3.10 |
-| containerd | 1.6 | 1.7 |
-| runc | 1.1 | 1.1.9 |

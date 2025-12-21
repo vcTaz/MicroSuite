@@ -2,6 +2,7 @@
 # ==============================================================================
 # Prerequisites Verification Script
 # Checks all dependencies required for energy proportionality experiments
+# Podman-only version
 # ==============================================================================
 
 set -u
@@ -18,25 +19,22 @@ FAIL="${RED}✗${NC}"
 WARN="${YELLOW}!${NC}"
 
 echo -e "\n${BLUE}═══════════════════════════════════════════════════════════${NC}"
-echo -e "${BLUE}        PREREQUISITES VERIFICATION                         ${NC}"
+echo -e "${BLUE}        PREREQUISITES VERIFICATION (Podman)                ${NC}"
 echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}\n"
 
 ERRORS=0
 WARNINGS=0
 
 # ------------------------------------------------------------------------------
-# Container Runtime (Docker or Podman)
+# Container Runtime (Podman)
 # ------------------------------------------------------------------------------
 echo -e "${BLUE}── Container Runtime ──${NC}\n"
-
-RUNTIME_FOUND=false
 
 # Podman
 echo -n "  Podman........................ "
 if command -v podman &>/dev/null; then
     VERSION=$(podman --version | grep -oP '\d+\.\d+' | head -1)
     echo -e "${PASS} v${VERSION}"
-    RUNTIME_FOUND=true
 
     # Podman Compose
     echo -n "  Podman Compose................ "
@@ -44,8 +42,9 @@ if command -v podman &>/dev/null; then
         VERSION=$(podman-compose --version 2>/dev/null | grep -oP '\d+\.\d+' | head -1 || echo "installed")
         echo -e "${PASS} v${VERSION}"
     else
-        echo -e "${WARN} NOT INSTALLED"
+        echo -e "${FAIL} NOT INSTALLED"
         echo -e "      ${YELLOW}Fix: sudo apt-get install -y podman-compose${NC}"
+        ((ERRORS++))
     fi
 
     # Podman checkpoint support (native)
@@ -54,46 +53,11 @@ if command -v podman &>/dev/null; then
         echo -e "${PASS} Native support"
     else
         echo -e "${WARN} May require update"
+        ((WARNINGS++))
     fi
 else
-    echo -e "${YELLOW}○${NC} NOT INSTALLED (optional if Docker available)"
-fi
-
-# Docker
-echo -n "  Docker........................ "
-if command -v docker &>/dev/null; then
-    VERSION=$(docker --version | grep -oP '\d+\.\d+' | head -1)
-    echo -e "${PASS} v${VERSION}"
-    RUNTIME_FOUND=true
-
-    # Docker Compose
-    echo -n "  Docker Compose................ "
-    if command -v docker-compose &>/dev/null; then
-        VERSION=$(docker-compose --version | grep -oP '\d+\.\d+' | head -1)
-        echo -e "${PASS} v${VERSION}"
-    elif docker compose version &>/dev/null; then
-        VERSION=$(docker compose version | grep -oP '\d+\.\d+' | head -1)
-        echo -e "${PASS} v${VERSION} (plugin)"
-    else
-        echo -e "${WARN} NOT INSTALLED"
-    fi
-
-    # Docker Experimental
-    echo -n "  Docker Experimental Mode...... "
-    if docker info 2>/dev/null | grep -q "Experimental: true"; then
-        echo -e "${PASS} Enabled"
-    else
-        echo -e "${WARN} DISABLED (required for Docker checkpoints)"
-        echo -e "      ${YELLOW}Fix: Add {\"experimental\": true} to /etc/docker/daemon.json${NC}"
-    fi
-else
-    echo -e "${YELLOW}○${NC} NOT INSTALLED (optional if Podman available)"
-fi
-
-# Check at least one runtime exists
-if [ "$RUNTIME_FOUND" = false ]; then
-    echo -e "\n  ${RED}ERROR: No container runtime found!${NC}"
-    echo -e "  ${YELLOW}Install either Podman or Docker${NC}"
+    echo -e "${FAIL} NOT INSTALLED"
+    echo -e "      ${YELLOW}Fix: sudo apt-get install -y podman${NC}"
     ((ERRORS++))
 fi
 
@@ -230,9 +194,9 @@ fi
 # ------------------------------------------------------------------------------
 echo -e "\n${BLUE}── µSuite Requirements ──${NC}\n"
 
-# Docker Image
-echo -n "  µSuite Docker Image........... "
-if docker images 2>/dev/null | grep -q "msuite-hdsearch"; then
+# Podman Image
+echo -n "  µSuite Podman Image........... "
+if podman images 2>/dev/null | grep -q "msuite-hdsearch"; then
     echo -e "${PASS} Found"
 else
     echo -e "${FAIL} NOT FOUND"
@@ -267,13 +231,12 @@ fi
 # ------------------------------------------------------------------------------
 echo -e "\n${BLUE}── Permissions ──${NC}\n"
 
-# Docker without sudo
-echo -n "  Docker (non-root)............. "
-if groups | grep -q docker; then
-    echo -e "${PASS} User in docker group"
+# Podman rootless check
+echo -n "  Podman (rootless)............. "
+if podman info 2>/dev/null | grep -q "rootless: true"; then
+    echo -e "${PASS} Running rootless"
 else
-    echo -e "${WARN} User not in docker group"
-    echo -e "      ${YELLOW}Fix: sudo usermod -aG docker \$USER && newgrp docker${NC}"
+    echo -e "${WARN} Running as root (rootless recommended)"
     ((WARNINGS++))
 fi
 

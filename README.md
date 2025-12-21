@@ -5,10 +5,10 @@
 µSuite was originally written to evaluate OS and network overheads faced by microservices. You can find more details about µSuite in our IISWC paper (http://akshithasriraman.eecs.umich.edu/pubs/IISWC2018-%CE%BCSuite-preprint.pdf).
 
 This µSuite Fork has been amended by ALPS in order to achieve the following:
-- Correct and confirm all the installation/compilation commands to run on Ubuntu Linux 18.04
-- Provide instructions to compile and run Docker and prepare a Docker image with the complete µSuite for easier deployment
-- Provide instructions and the configuration to run the applications on single node using docker-compose.yaml
-- Provide instructions and the configuration to run the applications on multiple nodes using docker-compose-swarm.yml
+- Correct and confirm all the installation/compilation commands to run on Ubuntu Linux 18.04+
+- Provide instructions to compile and run with Podman and prepare a container image with the complete µSuite for easier deployment
+- Provide instructions and the configuration to run the applications on single node using podman-compose
+- Provide instructions and the configuration to run the applications on multiple nodes using podman-compose
 - Provide instructions and source code to run the application on single node allowing the system to enter C6 deep sleep state
 - **Research resource disaggregation and container snapshotting for improved energy proportionality**
 
@@ -49,54 +49,46 @@ python3 energy_proportionality/analysis/analyze_results.py energy_proportionalit
 If you use this software in your work, we request that you cite the µSuite paper ("μSuite: A Benchmark Suite for Microservices", Akshitha Sriraman and Thomas F. Wenisch, IEEE International Symposium on Workload Characterization, September 2018), and that you send us a citation of your work.
 
 # Installation
-To install µSuite, please follow these steps (works on Ubuntu 18.04):
+To install µSuite, please follow these steps (works on Ubuntu 18.04+):
 
-# (1) ** Setup docker, cli and compose **
+# (1) ** Setup Podman and Podman Compose **
 
+```bash
+sudo apt update
+sudo apt -y install podman podman-compose
 ```
-curl -fsSL https://get.docker.com -o get-docker.sh
-DRY_RUN=1 sh ./get-docker.sh
-sudo sh get-docker.sh
-sudo apt -y install docker-compose
+## For saving registry login to be able to push images
+```bash
+sudo apt -y install gnupg2 pass
 ```
-## for saving docker login to be able to push images
-```
-sudo apt -y install gnupg2 pass 
-```
-## change the storage folder for more space to commit the image (in our case when we use Cloudlab)
-```
-sudo docker rm -f $(docker ps -aq); docker rmi -f $(docker images -q)
-sudo systemctl stop docker
-umount /var/lib/docker
-sudo rm -rf /var/lib/docker
-sudo mkdir /var/lib/docker
-sudo mkdir /dev/mkdocker
-sudo mount --rbind /dev/mkdocker /var/lib/docker
-sudo systemctl start docker
+## Change the storage folder for more space to commit the image (in our case when we use Cloudlab)
+```bash
+podman rm -f $(podman ps -aq); podman rmi -f $(podman images -q)
+sudo systemctl stop podman 2>/dev/null || true
+umount /var/lib/containers 2>/dev/null || true
+sudo rm -rf /var/lib/containers
+sudo mkdir -p /var/lib/containers
+sudo mkdir -p /dev/mkpodman
+sudo mount --rbind /dev/mkpodman /var/lib/containers
 ```
 
-# (2) ** Create a docker instance using our precompiled docker image **
+# (2) ** Create a Podman container using our precompiled image **
 
-```
+```bash
 mkdir microsuite
 cd microsuite
 git clone https://github.com/ucy-xilab/MicroSuite.git
 cd MicroSuite
 ```
-## Change to docker group
-```
-sudo newgrp docker
-```
-## Run docker compose
-```
-sudo docker compose up
+## Run Podman Compose
+```bash
+podman-compose up
 ```
 
-At this point we need to open a new terminal and login on the docker instance to execute our benchmark
-```
+At this point we need to open a new terminal and login on the container to execute our benchmark
+```bash
 cd microsuite
-su
-docker-compose exec hdsearch sh
+podman-compose exec hdsearch sh
 ```
 
 From this point on we can execute each benchmark based on the commands provided in section (4)
@@ -104,55 +96,50 @@ From this point on we can execute each benchmark based on the commands provided 
 # (3) ** Run a multinode execution **
 
 ## All following commands should be run only on Node 0
-## Close any docker-compose already running through the cloudlab profile
-```
-parallel-ssh -H "node0 node1 node2" -i "cd /microsuite/MicroSuite && sudo docker-compose down"
+## Close any podman-compose already running through the cloudlab profile
+```bash
+parallel-ssh -H "node0 node1 node2" -i "cd /microsuite/MicroSuite && podman-compose down"
 ```
 ## Download dataset
-```
+```bash
 cd /microsuite/MicroSuite && sudo wget https://akshithasriraman.eecs.umich.edu/dataset/HDSearch/image_feature_vectors.dat
 ```
-## Create swarm on Node 0
-```
-sudo docker swarm init --advertise-addr 10.10.1.1
-```
-## Join other nodes on swarm
-```
-parallel-ssh -H "node1" -i "sudo docker swarm join --token `sudo docker swarm join-token worker -q` 10.10.1.1:2377"
-parallel-ssh -H "node2" -i "sudo docker swarm join --token `sudo docker swarm join-token worker -q` 10.10.1.1:2377"
 
+## For multi-node Podman deployment
+Note: Podman does not have a direct Swarm equivalent. For distributed deployments,
+consider using Kubernetes/k3s, or run podman-compose on each node separately.
+
+```bash
 export NODE0=$(ssh node0 hostname)
 export NODE1=$(ssh node1 hostname)
 export NODE2=$(ssh node2 hostname)
 
 cd /microsuite/MicroSuite
-sudo docker stack deploy --compose-file=docker-compose-swarm.yml microsuite
+
+# Deploy using podman-compose (runs on local node)
+# For multi-node deployment, run this on each node with appropriate service configuration
+podman-compose -f docker-compose-swarm.yml up -d
 ```
+
 The provided docker-compose-swarm.yml file runs the HDSearch application. In order to run any other benchmark from the suite
 you need to change this file and edit the commands for each service based on the ones provided in section (4).
 
-In addition the following commands can be used to manage and monitor the progress of the nodes:
-```
-# Check services
-sudo docker stack services microsuite
+In addition the following commands can be used to manage and monitor the progress of the containers:
+```bash
+# Check running containers
+podman ps
 
 # Check logs
-sudo docker service logs --raw microsuite_bucket
-sudo docker service logs --raw microsuite_midtier
+podman logs hdsearch_bucket
+podman logs hdsearch_midtier
 
-# Check a service, e.g. client
-ssh node0
-sudo docker exec -ti $(sudo docker ps --filter name=microsuite_bucket.1* -q) bash
+# Execute command in a container
+podman exec -ti hdsearch_bucket bash
+podman exec -ti hdsearch_midtier bash
+podman exec -ti hdsearch_client bash
 
-ssh node1
-sudo docker exec -ti $(sudo docker ps --filter name=microsuite_midtier.1* -q) bash
-
-ssh node2
-sudo docker exec -ti $(sudo docker ps --filter name=microsuite_client.1* -q) bash
-
-# Close swarm
-sudo docker stack rm microsuite
-sudo docker stack deploy --compose-file=docker-compose-swarm.yml microsuite
+# Stop services
+podman-compose -f docker-compose-swarm.yml down
 ```
 
 # (4) ** Run benchmarks **

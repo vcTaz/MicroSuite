@@ -19,25 +19,13 @@ Step-by-step guide to run the energy proportionality experiment investigating re
 # Update package list
 sudo apt-get update
 
-# Install CRIU (Checkpoint/Restore In Userspace)
-sudo apt-get install -y criu
+# Install Podman, Podman Compose, and CRIU
+sudo apt-get install -y podman podman-compose criu
 
-# Verify CRIU installation
+# Verify installations
+podman --version
+podman-compose --version
 criu check
-```
-
-### 3. Configure Docker for Checkpointing
-
-```bash
-# Enable Docker experimental features
-sudo bash -c 'echo "{\"experimental\": true}" > /etc/docker/daemon.json'
-
-# Restart Docker
-sudo systemctl restart docker
-
-# Verify experimental is enabled
-docker info | grep -i experimental
-# Should show: Experimental: true
 ```
 
 ### 4. Install Python Dependencies (for analysis)
@@ -149,10 +137,10 @@ If you prefer to run each step manually:
 cd /home/tsazei01/MicroSuite/energy_proportionality/configs
 
 # Start all services
-docker-compose -f docker-compose-checkpoint.yml up -d
+podman-compose -f docker-compose-checkpoint.yml up -d
 
 # Verify services are running
-docker ps
+podman ps
 ```
 
 #### Monitor C6 State (in separate terminal)
@@ -191,7 +179,7 @@ sleep 10
 
 ```bash
 cd /home/tsazei01/MicroSuite/energy_proportionality/configs
-docker-compose -f docker-compose-checkpoint.yml down
+podman-compose -f docker-compose-checkpoint.yml down
 ```
 
 ---
@@ -311,14 +299,14 @@ grep CONFIG_CHECKPOINT_RESTORE /boot/config-$(uname -r)
 # If not enabled, you may need a different kernel
 ```
 
-### Docker Checkpoint Fails
+### Podman Checkpoint Fails
 
 ```bash
-# Check Docker experimental mode
-docker info | grep Experimental
+# Check Podman checkpoint support
+podman container checkpoint --help
 
 # View detailed error
-docker checkpoint create --checkpoint-dir=/tmp hdsearch_midtier test_ckpt 2>&1
+podman container checkpoint --export=/tmp/test_ckpt.tar.gz hdsearch_midtier 2>&1
 ```
 
 ### Low C6 Residency
@@ -338,7 +326,7 @@ echo powersave | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
 
 ```bash
 # Common cause: container was removed
-# Solution: don't run 'docker-compose down' between checkpoint and restore
+# Solution: don't run 'podman-compose down' between checkpoint and restore
 
 # Check checkpoint exists
 ls -la /mnt/disaggregated_memory/
@@ -356,11 +344,11 @@ sudo ./scripts/setup_disaggregated_memory.sh /mnt/disaggregated_memory 8G
 python3 analysis/analyze_results.py results/my_experiment_*/
 
 # === MANUAL CHECKPOINT/RESTORE ===
-cd configs && docker-compose -f docker-compose-checkpoint.yml up -d
+cd configs && podman-compose -f docker-compose-checkpoint.yml up -d
 ../scripts/checkpoint_container.sh hdsearch_midtier /mnt/disaggregated_memory
 # ... wait ...
 ../scripts/restore_container.sh hdsearch_midtier <checkpoint_name> /mnt/disaggregated_memory
-docker-compose -f docker-compose-checkpoint.yml down
+podman-compose -f docker-compose-checkpoint.yml down
 ```
 
 ---
@@ -372,4 +360,4 @@ After completing the basic experiment:
 1. **Vary idle duration**: Test with 1s, 5s, 10s, 30s idle periods
 2. **Vary workload**: Adjust QPS in docker-compose to test different loads
 3. **Compare services**: Checkpoint bucket vs midtier vs both
-4. **Multi-node**: Extend to distributed deployment with Docker Swarm
+4. **Multi-node**: Extend to distributed deployment with podman-compose on each node

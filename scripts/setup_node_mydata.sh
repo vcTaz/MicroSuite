@@ -1,33 +1,25 @@
-#Setup docker, cli and compose    
-    curl -fsSL https://get.docker.com -o get-docker.sh
-    DRY_RUN=1 sh ./get-docker.sh
-    sudo sh get-docker.sh
-    sudo apt -y install docker-compose
-    # for saving docker login to be able to push images
-    sudo apt -y install gnupg2 pass 
+#Setup podman and podman-compose
+    # Install podman
+    sudo apt update
+    sudo apt -y install podman podman-compose
+    # for saving registry login to be able to push images
+    sudo apt -y install gnupg2 pass
     # change the storage folder for more space to commit the image
-    sudo docker rm -f $(docker ps -aq); docker rmi -f $(docker images -q)
+    podman rm -f $(podman ps -aq); podman rmi -f $(podman images -q)
 	sleep 5
-sudo systemctl stop docker
+sudo systemctl stop podman 2>/dev/null || true
 sleep 5
-sudo umount /var/lib/docker
-sudo rm -rf /var/lib/docker
-sudo mkdir /var/lib/docker
-sudo mkdir -p /mnt/newdata/dev/mkdocker
-sudo mount --rbind /mnt/newdata/dev/mkdocker /var/lib/docker
-sudo systemctl start docker
+sudo umount /var/lib/containers 2>/dev/null || true
+sudo rm -rf /var/lib/containers
+sudo mkdir -p /var/lib/containers
+sudo mkdir -p /mnt/newdata/dev/mkpodman
+sudo mount --rbind /mnt/newdata/dev/mkpodman /var/lib/containers
 
-#Set a docker compose file    
+#Set a podman compose file
     mkdir microsuite
     cd microsuite
     git clone https://github.com/svassi04/MicroSuite.git
     cd MicroSuite
-    
-    # Change to docker group
-    sudo newgrp docker
-    
-    # Run docker compose example
-    sudo docker compose up
-	
-	
-	
+
+    # Run podman compose example
+    podman-compose up

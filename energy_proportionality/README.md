@@ -33,22 +33,22 @@ energy_proportionality/
 
 ### System Requirements
 - Linux kernel 5.15+ (6.1+ recommended for CXL support)
-- Docker 24.0+ with experimental features enabled
+- Podman 3.4+ with podman-compose
 - CRIU 3.17+
 
 ### Installation
 
 ```bash
-# Install CRIU
+# Install Podman and CRIU
 sudo apt-get update
-sudo apt-get install -y criu
+sudo apt-get install -y podman podman-compose criu
 
 # Verify CRIU
 criu check
 
-# Enable Docker experimental features
-echo '{"experimental": true}' | sudo tee /etc/docker/daemon.json
-sudo systemctl restart docker
+# Verify Podman
+podman --version
+podman-compose --version
 ```
 
 ## Quick Start
@@ -87,7 +87,7 @@ python3 analysis/parse_turbostat.py results/my_experiment_*/run1_turbostat.log
 ```bash
 # Start services
 cd configs
-docker-compose -f docker-compose-checkpoint.yml up -d
+podman-compose -f docker-compose-checkpoint.yml up -d
 
 # Create checkpoint (stops container)
 ../scripts/checkpoint_container.sh hdsearch_midtier /mnt/disaggregated_memory
@@ -165,7 +165,7 @@ grep CONFIG_CHECKPOINT_RESTORE /boot/config-$(uname -r)
 ```bash
 # Issue: TCP connections prevent checkpoint
 # Solution: Use --tcp-established flag or close connections first
-docker checkpoint create --tcp-established ...
+podman container checkpoint --tcp-established ...
 ```
 
 ### Container Won't Restore

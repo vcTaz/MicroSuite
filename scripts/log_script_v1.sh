@@ -1,22 +1,22 @@
 
-       iutomation Script
+       Automation Script
 #
 # This script automates the process of running the HDSearch microservices,
 # monitoring them with turbostat, and collecting logs.
 #
 # What it does:
-# 1. Defines file names for docker-compose and logs.
-# 2. Cleans up any previous Docker containers and old logs.
+# 1. Defines file names for podman-compose and logs.
+# 2. Cleans up any previous Podman containers and old logs.
 # 3. Starts turbostat in the background to capture CPU idleness data.
 # 4. Starts each microservice sequentially, logging timestamps for each event.
 # 5. Waits for the client's load generation to complete.
 # 6. Stops the turbostat process.
 # 7. Saves the individual logs for each microservice.
-# 8. Stops and removes all Docker containers.
+# 8. Stops and removes all Podman containers.
 # ==============================================================================
 
 # --- Configuration ---
-# The name of your Docker Compose file.
+# The name of your Podman Compose file.
 COMPOSE_FILE="docker-compose-hdsearch-split.yml"
 
 # Log file for the main experiment script's output.
@@ -41,7 +41,7 @@ log() {
 log ">>> Starting Experiment <<<"
 log "Performing initial cleanup..."
 # Shut down any containers defined in the compose file, if they are running.
-docker-compose -f "$COMPOSE_FILE" down
+podman-compose -f "$COMPOSE_FILE" down
 # Remove old log files to prevent confusion.
 rm -f "$TURBOSTAT_LOG_FILE" bucket.log midtier.log client.log
 log "Cleanup complete."
@@ -68,17 +68,17 @@ if ! ps -p $TURBOSTAT_PID > /dev/null; then
 # 3. Launch Microservices Sequentially
 # ------------------------------------
 log "Launching 'bucket' service..."
-docker-compose -f "$COMPOSE_FILE" up -d bucket
+podman-compose -f "$COMPOSE_FILE" up -d bucket
 log "'bucket' service started."
 sleep 5 # Give it a moment to initialize.
 
 log "Launching 'midtier' service..."
-docker-compose -f "$COMPOSE_FILE" up -d midtier
+podman-compose -f "$COMPOSE_FILE" up -d midtier
 log "'midtier' service started."
 sleep 5 # Give it a moment to initialize.
 
 log "Launching 'client' service to generate load..."
-docker-compose -f "$COMPOSE_FILE" up -d client
+podman-compose -f "$COMPOSE_FILE" up -d client
 log "'client' service started. Now waiting for it to finish."
 echo "----------------------------------------------------" | tee -a "$MAIN_LOG_FILE"
 
@@ -87,8 +87,8 @@ echo "----------------------------------------------------" | tee -a "$MAIN_LOG_
 # ----------------------------
 # We monitor the logs of the client container in the background.
 # The `grep -m 1` command will exit successfully once it finds the target string.
-# The `wait` command pauses the script until the backgrounded `docker logs` command exits.
-docker logs -f hdsearch_client | grep -m 1 "Load generator finished" &
+# The `wait` command pauses the script until the backgrounded `podman logs` command exits.
+podman logs -f hdsearch_client | grep -m 1 "Load generator finished" &
 wait $!
 log "Client has finished its load generation task."
 echo "----------------------------------------------------" | tee -a "$MAIN_LOG_FILE"
@@ -104,9 +104,9 @@ wait $TURBOSTAT_PID 2>/dev/null
 log "Turbostat stopped."
 
 log "Collecting logs from each microservice..."
-docker logs hdsearch_bucket > bucket.log 2>&1
-docker logs hdsearch_midtier > midtier.log 2>&1
-docker logs hdsearch_client > client.log 2>&1
+podman logs hdsearch_bucket > bucket.log 2>&1
+podman logs hdsearch_midtier > midtier.log 2>&1
+podman logs hdsearch_client > client.log 2>&1
 log "Logs saved to bucket.log, midtier.log, and client.log."
 echo "----------------------------------------------------" | tee -a "$MAIN_LOG_FILE"
 
@@ -114,7 +114,7 @@ echo "----------------------------------------------------" | tee -a "$MAIN_LOG_
 # 6. Final Cleanup
 # ----------------
 log "Experiment is complete. Shutting down all services..."
-docker-compose -f "$COMPOSE_FILE" down
+podman-compose -f "$COMPOSE_FILE" down
 log "All services have been stopped and removed."
 log ">>> Experiment Finished <<<"
 

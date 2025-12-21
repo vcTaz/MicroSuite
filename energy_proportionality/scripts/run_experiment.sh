@@ -2,7 +2,7 @@
 # ==============================================================================
 # Energy Proportionality Experiment Runner
 # Main script for investigating resource disaggregation and container snapshotting
-# Supports both Docker and Podman runtimes
+# Uses Podman for container orchestration
 # ==============================================================================
 
 set -e
@@ -36,7 +36,7 @@ log_section() { echo -e "\n${BLUE}========================================${NC}"
 # Detect runtime
 RUNTIME=$(detect_runtime)
 if [ "$RUNTIME" = "none" ]; then
-    log_error "No container runtime found (Docker or Podman)"
+    log_error "Podman not found. Please install Podman."
     exit 1
 fi
 
@@ -62,17 +62,13 @@ log_info "Results directory: ${RUN_DIR}"
 log_section "Checking Prerequisites"
 
 # Check runtime
-log_info "Container Runtime: ${RUNTIME}"
+log_info "Container Runtime: Podman"
 log_info "Compose Command: ${COMPOSE_CMD}"
 
 # Check checkpoint support
 CKPT_SUPPORT=$(check_checkpoint_support "$RUNTIME")
 if [ "$CKPT_SUPPORT" = "supported" ]; then
     log_info "Checkpoint Support: OK"
-elif [ "$CKPT_SUPPORT" = "requires_experimental" ]; then
-    log_error "Docker experimental features not enabled"
-    log_error "Add {\"experimental\": true} to /etc/docker/daemon.json"
-    exit 1
 else
     log_error "Checkpoint not supported"
     exit 1
@@ -125,24 +121,15 @@ ${COMPOSE_CMD} -f docker-compose-checkpoint.yml up -d
 
 # Wait for client to finish
 log_info "Waiting for baseline run to complete..."
-if [ "$RUNTIME" = "podman" ]; then
-    podman logs -f hdsearch_client 2>&1 | tee "${RUN_DIR}/baseline_client.log" | grep -m 1 "finished" || sleep 35
-else
-    docker logs -f hdsearch_client 2>&1 | tee "${RUN_DIR}/baseline_client.log" | grep -m 1 "finished" || sleep 35
-fi
+podman logs -f hdsearch_client 2>&1 | tee "${RUN_DIR}/baseline_client.log" | grep -m 1 "finished" || sleep 35
 
 # Stop monitoring
 kill $C6_MONITOR_PID 2>/dev/null || true
 [ "$USE_TURBOSTAT" = true ] && sudo kill $TURBOSTAT_PID 2>/dev/null || true
 
 # Collect logs
-if [ "$RUNTIME" = "podman" ]; then
-    podman logs hdsearch_bucket > "${RUN_DIR}/baseline_bucket.log" 2>&1
-    podman logs hdsearch_midtier > "${RUN_DIR}/baseline_midtier.log" 2>&1
-else
-    docker logs hdsearch_bucket > "${RUN_DIR}/baseline_bucket.log" 2>&1
-    docker logs hdsearch_midtier > "${RUN_DIR}/baseline_midtier.log" 2>&1
-fi
+podman logs hdsearch_bucket > "${RUN_DIR}/baseline_bucket.log" 2>&1
+podman logs hdsearch_midtier > "${RUN_DIR}/baseline_midtier.log" 2>&1
 
 # Clean up
 ${COMPOSE_CMD} -f docker-compose-checkpoint.yml down
@@ -173,11 +160,7 @@ for run in $(seq 1 $NUM_RUNS); do
     # Phase 1: Initial load burst
     log_info "Phase 1: Initial load burst"
     ${COMPOSE_CMD} -f docker-compose-checkpoint.yml up -d client
-    if [ "$RUNTIME" = "podman" ]; then
-        podman logs -f hdsearch_client 2>&1 | grep -m 1 "finished" || sleep 35
-    else
-        docker logs -f hdsearch_client 2>&1 | grep -m 1 "finished" || sleep 35
-    fi
+    podman logs -f hdsearch_client 2>&1 | grep -m 1 "finished" || sleep 35
     ${COMPOSE_CMD} -f docker-compose-checkpoint.yml stop client
 
     # Phase 2: Checkpoint midtier (simulating snapshot to disaggregated memory)
@@ -186,29 +169,15 @@ for run in $(seq 1 $NUM_RUNS); do
 
     CHECKPOINT_NAME="midtier_run${run}_${TIMESTAMP}"
 
-    if [ "$RUNTIME" = "podman" ]; then
-        if podman container checkpoint \
-            --export="${CHECKPOINT_DIR}/${CHECKPOINT_NAME}.tar.gz" \
-            hdsearch_midtier 2>"${RUN_DIR}/run${run}_checkpoint_error.log"; then
-            CHECKPOINT_END=$(date +%s%N)
-            CHECKPOINT_MS=$(( (CHECKPOINT_END - CHECKPOINT_START) / 1000000 ))
-            log_info "Checkpoint created in ${CHECKPOINT_MS}ms"
-        else
-            log_error "Checkpoint failed - see ${RUN_DIR}/run${run}_checkpoint_error.log"
-            CHECKPOINT_MS=-1
-        fi
+    if podman container checkpoint \
+        --export="${CHECKPOINT_DIR}/${CHECKPOINT_NAME}.tar.gz" \
+        hdsearch_midtier 2>"${RUN_DIR}/run${run}_checkpoint_error.log"; then
+        CHECKPOINT_END=$(date +%s%N)
+        CHECKPOINT_MS=$(( (CHECKPOINT_END - CHECKPOINT_START) / 1000000 ))
+        log_info "Checkpoint created in ${CHECKPOINT_MS}ms"
     else
-        if docker checkpoint create \
-            --checkpoint-dir="${CHECKPOINT_DIR}" \
-            hdsearch_midtier \
-            "${CHECKPOINT_NAME}" 2>"${RUN_DIR}/run${run}_checkpoint_error.log"; then
-            CHECKPOINT_END=$(date +%s%N)
-            CHECKPOINT_MS=$(( (CHECKPOINT_END - CHECKPOINT_START) / 1000000 ))
-            log_info "Checkpoint created in ${CHECKPOINT_MS}ms"
-        else
-            log_error "Checkpoint failed - see ${RUN_DIR}/run${run}_checkpoint_error.log"
-            CHECKPOINT_MS=-1
-        fi
+        log_error "Checkpoint failed - see ${RUN_DIR}/run${run}_checkpoint_error.log"
+        CHECKPOINT_MS=-1
     fi
 
     # Phase 3: Idle period (CPU should enter C6)
@@ -219,39 +188,21 @@ for run in $(seq 1 $NUM_RUNS); do
     log_info "Phase 4: Restoring midtier..."
     RESTORE_START=$(date +%s%N)
 
-    if [ "$RUNTIME" = "podman" ]; then
-        if podman container restore \
-            --import="${CHECKPOINT_DIR}/${CHECKPOINT_NAME}.tar.gz" \
-            --name=hdsearch_midtier 2>"${RUN_DIR}/run${run}_restore_error.log"; then
-            RESTORE_END=$(date +%s%N)
-            RESTORE_MS=$(( (RESTORE_END - RESTORE_START) / 1000000 ))
-            log_info "Restored in ${RESTORE_MS}ms"
-        else
-            log_error "Restore failed - see ${RUN_DIR}/run${run}_restore_error.log"
-            RESTORE_MS=-1
-        fi
+    if podman container restore \
+        --import="${CHECKPOINT_DIR}/${CHECKPOINT_NAME}.tar.gz" \
+        --name=hdsearch_midtier 2>"${RUN_DIR}/run${run}_restore_error.log"; then
+        RESTORE_END=$(date +%s%N)
+        RESTORE_MS=$(( (RESTORE_END - RESTORE_START) / 1000000 ))
+        log_info "Restored in ${RESTORE_MS}ms"
     else
-        if docker start \
-            --checkpoint="${CHECKPOINT_NAME}" \
-            --checkpoint-dir="${CHECKPOINT_DIR}" \
-            hdsearch_midtier 2>"${RUN_DIR}/run${run}_restore_error.log"; then
-            RESTORE_END=$(date +%s%N)
-            RESTORE_MS=$(( (RESTORE_END - RESTORE_START) / 1000000 ))
-            log_info "Restored in ${RESTORE_MS}ms"
-        else
-            log_error "Restore failed - see ${RUN_DIR}/run${run}_restore_error.log"
-            RESTORE_MS=-1
-        fi
+        log_error "Restore failed - see ${RUN_DIR}/run${run}_restore_error.log"
+        RESTORE_MS=-1
     fi
 
     # Phase 5: Second load burst after restore
     log_info "Phase 5: Post-restore load burst"
     ${COMPOSE_CMD} -f docker-compose-checkpoint.yml up -d client
-    if [ "$RUNTIME" = "podman" ]; then
-        podman logs -f hdsearch_client 2>&1 | grep -m 1 "finished" || sleep 35
-    else
-        docker logs -f hdsearch_client 2>&1 | grep -m 1 "finished" || sleep 35
-    fi
+    podman logs -f hdsearch_client 2>&1 | grep -m 1 "finished" || sleep 35
 
     # Stop monitoring
     kill $C6_MONITOR_PID 2>/dev/null || true
@@ -268,15 +219,9 @@ for run in $(seq 1 $NUM_RUNS); do
     echo "${run},checkpoint,${CHECKPOINT_MS},${RESTORE_MS},${IDLE_DURATION},${C6_RESIDENCY}" >> "${RESULTS_FILE}"
 
     # Collect logs
-    if [ "$RUNTIME" = "podman" ]; then
-        podman logs hdsearch_bucket > "${RUN_DIR}/run${run}_bucket.log" 2>&1
-        podman logs hdsearch_midtier > "${RUN_DIR}/run${run}_midtier.log" 2>&1
-        podman logs hdsearch_client > "${RUN_DIR}/run${run}_client.log" 2>&1
-    else
-        docker logs hdsearch_bucket > "${RUN_DIR}/run${run}_bucket.log" 2>&1
-        docker logs hdsearch_midtier > "${RUN_DIR}/run${run}_midtier.log" 2>&1
-        docker logs hdsearch_client > "${RUN_DIR}/run${run}_client.log" 2>&1
-    fi
+    podman logs hdsearch_bucket > "${RUN_DIR}/run${run}_bucket.log" 2>&1
+    podman logs hdsearch_midtier > "${RUN_DIR}/run${run}_midtier.log" 2>&1
+    podman logs hdsearch_client > "${RUN_DIR}/run${run}_client.log" 2>&1
 
     # Clean up
     ${COMPOSE_CMD} -f docker-compose-checkpoint.yml down
