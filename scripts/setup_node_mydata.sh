@@ -15,11 +15,11 @@ sudo mkdir -p /var/lib/containers
 sudo mkdir -p /mnt/newdata/dev/mkpodman
 sudo mount --rbind /mnt/newdata/dev/mkpodman /var/lib/containers
 
-#Set a podman compose file
+#Set a podman-compose file
     mkdir microsuite
     cd microsuite
     git clone https://github.com/svassi04/MicroSuite.git
     cd MicroSuite
 
-    # Run podman compose example
+    # Run podman-compose example
     podman-compose up

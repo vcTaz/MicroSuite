@@ -42,7 +42,8 @@ get_compose_command() {
         if command -v podman-compose &>/dev/null; then
             echo "podman-compose"
         else
-            echo "podman compose"
+            echo "ERROR: podman-compose not found. Please install it with: pip install podman-compose" >&2
+            return 1
         fi
     fi
 }

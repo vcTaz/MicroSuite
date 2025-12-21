@@ -13,11 +13,11 @@
     sudo mkdir -p /dev/mkpodman
     sudo mount --rbind /dev/mkpodman /var/lib/containers
 
-#Set a podman compose file
+#Set a podman-compose file
     mkdir microsuite
     cd microsuite
     git clone https://github.com/ucy-xilab/MicroSuite.git
     cd MicroSuite
 
-    # Run podman compose example
+    # Run podman-compose example
     podman-compose up
