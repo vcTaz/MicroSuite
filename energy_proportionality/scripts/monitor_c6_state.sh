@@ -13,7 +13,6 @@ DURATION="${4:-0}"  # 0 = indefinite
 
 # Colors for output
 GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
 NC='\033[0m'
 
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
@@ -50,7 +49,8 @@ detect_cstates() {
     local states=()
     for i in {0..10}; do
         if [ -d "/sys/devices/system/cpu/cpu${cpu}/cpuidle/state${i}" ]; then
-            local name=$(get_cstate_name $cpu $i)
+            local name
+            name=$(get_cstate_name "$cpu" "$i")
             states+=("${i}:${name}")
         fi
     done
@@ -63,7 +63,7 @@ log_info "Interval: ${INTERVAL}s"
 log_info "Output: ${OUTPUT_FILE}"
 
 # Detect C-states
-CSTATES=($(detect_cstates))
+read -ra CSTATES < <(detect_cstates)
 log_info "Detected C-states: ${CSTATES[*]}"
 
 # Find C6 state index (usually state 3, but can vary)

@@ -152,7 +152,7 @@ fi
 
 # Checkpoint/Restore Support
 echo -n "  CONFIG_CHECKPOINT_RESTORE..... "
-if grep -q "CONFIG_CHECKPOINT_RESTORE=y" /boot/config-$(uname -r) 2>/dev/null; then
+if grep -q "CONFIG_CHECKPOINT_RESTORE=y" "/boot/config-$(uname -r)" 2>/dev/null; then
     echo -e "${PASS} Enabled"
 else
     echo -e "${FAIL} NOT ENABLED"
